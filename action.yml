@@ -1,0 +1,44 @@
+name: "Qwiet AI Static Analysis"
+description: "Run preZero static analysis using Qwiet AI's ShiftLeft CLI."
+author: "Sandeep Kumar Jha"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  enable_sarif:
+    description: "Enable SARIF report generation and upload (true/false)"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+  - uses: actions/checkout@v3
+  - name: Download ShiftLeft CLI
+    shell: bash
+    run: |
+      curl https://cdn.shiftleft.io/download/sl > ${GITHUB_WORKSPACE}/sl && chmod a+rx ${GITHUB_WORKSPACE}/sl
+
+  - name: preZero Static Analysis
+    shell: bash
+    run: |
+      ./sl analyze --app "${GITHUB_REPOSITORY_OWNER}-${GITHUB_REPOSITORY#*/}" --verbose --strict --wait
+    env:
+      SHIFTLEFT_API_HOST: www.shiftleft.io
+      SHIFTLEFT_GRPC_TELEMETRY_HOST: telemetry.shiftleft.io:443
+      SHIFTLEFT_GRPC_API_HOST: api.shiftleft.io:443
+      
+  - name: Generate Sarif Report
+    if: inputs.enable_sarif == 'true'
+    shell: bash
+    run: |
+      chmod +x ${{ github.action_path }}/generate_sarif.sh
+      ${{ github.action_path }}/generate_sarif.sh
+      
+  - name: Export Sarif Report to GitHub Code Scanning
+    if: inputs.enable_sarif == 'true'
+    uses: github/codeql-action/upload-sarif@v3
+    with:
+      sarif_file: report/qwiet-sarif-report-${{ github.repository_owner }}-${{ github.event.repository.name }}.sarif
+      category: qwiet-prezero
